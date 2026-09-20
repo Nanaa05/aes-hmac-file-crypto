@@ -1,24 +1,18 @@
-import argparse
 import hashlib
 import os
 import sys
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from crypto_common import (CHUNK, IV_LEN, KEY_FILE, MAGIC, TAG_LEN, dec_path, load_key)
+from .crypto_common import CHUNK, IV_LEN, MAGIC, TAG_LEN, dec_path, load_key
 
-def main():
-    p = argparse.ArgumentParser(description="verify then decrypt a file")
-    p.add_argument("input", help="the .enc file to verify and decrypt")
-    p.add_argument("-k", "--key", default=KEY_FILE)
-    p.add_argument("-o", "--out", help="override the default decrypted/<name>")
-    args = p.parse_args()
-    args.out = args.out or dec_path(args.input)
-    aes_key, mac_key = load_key(args.key)
-    body_len = os.path.getsize(args.input) - TAG_LEN
+def do_decrypt(input_path, key_path, out_path=None):
+    out_path = out_path or dec_path(input_path)
+    aes_key, mac_key = load_key(key_path)
+    body_len = os.path.getsize(input_path) - TAG_LEN
     if body_len < len(MAGIC) + IV_LEN:
         sys.exit("VERIFY FAILED: file is too short to be a CSEC1 container")
-    with open(args.input, "rb") as fin:
+    with open(input_path, "rb") as fin:
         header = fin.read(len(MAGIC) + IV_LEN)
         if header[:len(MAGIC)] != MAGIC:
             sys.exit("VERIFY FAILED: bad magic (not a CSEC1 file)")
@@ -44,8 +38,8 @@ def main():
         unpadder = padding.PKCS7(128).unpadder()
         digest = hashlib.sha256()
         remaining = body_len - len(header)
-        os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-        with open(args.out, "wb") as fout:
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+        with open(out_path, "wb") as fout:
             while remaining:
                 chunk = fin.read(min(CHUNK, remaining))
                 remaining -= len(chunk)
@@ -55,9 +49,6 @@ def main():
             plain = unpadder.update(decryptor.finalize()) + unpadder.finalize()
             digest.update(plain)
             fout.write(plain)
-    print(f"decrypted {args.input} -> {args.out}")
+    print(f"decrypted {input_path} -> {out_path}")
     print(f"  plaintext sha256: {digest.hexdigest()}")
     return 0
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -8,6 +8,20 @@ protected with **HMAC-SHA256** (encrypt-then-MAC).
 
 Needs Python 3 and the `cryptography` library.
 
+### Option 1: Install as a package
+
+Installing the package makes the `filecrypt` command available everywhere in your environment:
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+### Option 2: Use requirements.txt
+
+If you prefer not to install the package, you can just install the dependencies:
+
 ```sh
 pip install -r requirements.txt
 ```
@@ -20,12 +34,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+
+
 Run every command below from the project root, since the default paths are relative.
 
 ## 1. Generate the shared key
 
 ```sh
-python3 generate_key.py
+# If you installed it as a package:
+filecrypt -g
+
+# Or if you used requirements.txt:
+python3 -m aeshmac.main -g
 ```
 
 Writes 32 random bytes to `keys/shared.key`. Do this once. Running it again
@@ -35,8 +55,13 @@ decrypted.
 ## 2. Encrypt
 
 ```sh
-python3 encrypt.py samples/small.txt
-python3 encrypt.py samples/10mb_file.pdf
+# If you installed it as a package:
+filecrypt -e samples/small.txt
+filecrypt -e samples/10mb_file.pdf
+
+# Or if you used requirements.txt:
+python3 -m aeshmac.main -e samples/small.txt
+python3 -m aeshmac.main -e samples/10mb_file.pdf
 ```
 
 The output goes to `encrypted/` with `.enc` appended:
@@ -52,8 +77,13 @@ partner compares against at the end.
 ## 3. Decrypt
 
 ```sh
-python3 decrypt.py encrypted/small.txt.enc
-python3 decrypt.py encrypted/10mb_file.pdf.enc
+# If you installed it as a package:
+filecrypt -d encrypted/small.txt.enc
+filecrypt -d encrypted/10mb_file.pdf.enc
+
+# Or if you used requirements.txt:
+python3 -m aeshmac.main -d encrypted/small.txt.enc
+python3 -m aeshmac.main -d encrypted/10mb_file.pdf.enc
 ```
 
 The output goes to `decrypted/` with `.enc` removed, so the original extension is
@@ -79,12 +109,34 @@ The two hashes on each line must be identical.
 
 ## Options
 
-Both scripts take optional flags:
+The `filecrypt` command takes the following flags:
 
-| Flag | Meaning              | Default                |
-| ---- | -------------------- | ---------------------- |
-| `-k` | key file to use      | `keys/shared.key`      |
-| `-o` | output path override | derived as shown above |
+| Flag | Meaning                                         |
+| ---- | ----------------------------------------------- |
+| `-e` | Encrypt a file                                  |
+| `-d` | Decrypt a file                                  |
+| `-g` | Generate a new shared secret key                |
+| `-v` | Show version                                    |
+| `-k` | Key file to use (default: `keys/shared.key`)    |
+| `-o` | Output path override (derived as shown above)   |
+
+```text
+usage: filecrypt [-h] [-v] (-e | -d | -g) [-k KEY] [-o OUT] [input]
+
+AES-HMAC file encryption/decryption utility
+
+positional arguments:
+  input               Input file (required for encrypt/decrypt)
+
+options:
+  -h, --help          show this help message and exit
+  -v, --version       show program's version number and exit
+  -e, --encrypt       Encrypt a file
+  -d, --decrypt       Decrypt a file
+  -g, --generate-key  Generate a new shared secret key
+  -k, --key KEY       Path to the shared secret key (default: keys/shared.key)
+  -o, --out OUT       Override the default output path
+```
 
 ## Exchanging files with your partner
 
@@ -92,12 +144,17 @@ Send them:
 
 1. `keys/shared.key`, over a different channel than the file itself.
 2. The `.enc` file from `encrypted/`.
-3. The SHA-256 that `encrypt.py` printed.
+3. The SHA-256 that the encrypt command printed.
 
 They run:
 
 ```sh
-python3 decrypt.py small.txt.enc -k shared.key
+# If you installed it as a package:
+filecrypt -d small.txt.enc -k shared.key
+
+# Or if you used requirements.txt:
+python3 -m aeshmac.main -d small.txt.enc -k shared.key
+
 sha256sum decrypted/small.txt
 ```
 
@@ -135,10 +192,13 @@ tag        32 bytes    HMAC-SHA256
 ## Files
 
 ```
-generate_key.py    creates the 32 byte shared secret
-encrypt.py         AES-256-CBC, then appends the HMAC tag
-decrypt.py         verify pass, then decrypt pass
-crypto_common.py   format constants, path helpers, HKDF key derivation
+aeshmac/           package containing the crypto logic
+  main.py          CLI entry point parsing -e, -d, -g
+  generate_key.py  creates the 32 byte shared secret
+  encrypt.py       AES-256-CBC, then appends the HMAC tag
+  decrypt.py       verify pass, then decrypt pass
+  crypto_common.py format constants, path helpers, HKDF key derivation
+setup.py           package definition with entry points
 samples/           original files
 encrypted/         .enc files, these are what you send
 decrypted/         recovered files
